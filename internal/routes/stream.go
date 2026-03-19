@@ -42,6 +42,11 @@ func getStreamRoute(ctx *gin.Context) {
 		http.Error(w, "missing hash param", http.StatusBadRequest)
 		return
 	}
+	expParam := ctx.Query("exp")
+	if expParam == "" {
+		http.Error(w, "missing exp param", http.StatusBadRequest)
+		return
+	}
 
 	worker := bot.GetNextWorker()
 
@@ -53,14 +58,8 @@ func getStreamRoute(ctx *gin.Context) {
 		return
 	}
 
-	expectedHash := utils.PackFile(
-		file.FileName,
-		file.FileSize,
-		file.MimeType,
-		file.ID,
-	)
-	if !utils.CheckHash(authHash, expectedHash) {
-		http.Error(w, "invalid hash", http.StatusBadRequest)
+	if !utils.CheckStreamToken(messageID, file, authHash, expParam) {
+		http.Error(w, "invalid or expired link", http.StatusBadRequest)
 		return
 	}
 

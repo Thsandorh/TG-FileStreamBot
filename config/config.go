@@ -42,6 +42,7 @@ type config struct {
 	ApiHash        string       `envconfig:"API_HASH" required:"true"`
 	BotToken       string       `envconfig:"BOT_TOKEN" required:"true"`
 	LogChannelID   int64        `envconfig:"LOG_CHANNEL" required:"true"`
+	HashSecret     string       `envconfig:"HASH"`
 	Dev            bool         `envconfig:"DEV" default:"false"`
 	Port           int          `envconfig:"PORT" default:"8080"`
 	Host           string       `envconfig:"HOST" default:""`
@@ -57,6 +58,8 @@ type config struct {
 	StreamBufferCount int `envconfig:"STREAM_BUFFER_COUNT" default:"8"`
 	StreamTimeoutSec  int `envconfig:"STREAM_TIMEOUT_SEC" default:"30"`
 	StreamMaxRetries  int `envconfig:"STREAM_MAX_RETRIES" default:"3"`
+	LinkTTLHours      int `envconfig:"LINK_TTL_HOURS" default:"48"`
+	LinkGraceHours    int `envconfig:"LINK_GRACE_HOURS" default:"24"`
 }
 
 var botTokenRegex = regexp.MustCompile(`MULTI\_TOKEN\d+=(.*)`)
@@ -82,6 +85,7 @@ func SetFlagsFromConfig(cmd *cobra.Command) {
 	cmd.Flags().String("api-hash", ValueOf.ApiHash, "Telegram API Hash")
 	cmd.Flags().String("bot-token", ValueOf.BotToken, "Telegram Bot Token")
 	cmd.Flags().Int64("log-channel", ValueOf.LogChannelID, "Telegram Log Channel ID")
+	cmd.Flags().String("hash-secret", ValueOf.HashSecret, "Secret used to sign stream links")
 	cmd.Flags().Bool("dev", ValueOf.Dev, "Enable development mode")
 	cmd.Flags().IntP("port", "p", ValueOf.Port, "Server port")
 	cmd.Flags().String("host", ValueOf.Host, "Server host that will be included in links")
@@ -94,6 +98,8 @@ func SetFlagsFromConfig(cmd *cobra.Command) {
 	cmd.Flags().Int("stream-buffer-count", ValueOf.StreamBufferCount, "Number of blocks to prefetch")
 	cmd.Flags().Int("stream-timeout-sec", ValueOf.StreamTimeoutSec, "Maximum time to wait for a single block (in seconds)")
 	cmd.Flags().Int("stream-max-retries", ValueOf.StreamMaxRetries, "Number of retry attempts for failed fetches")
+	cmd.Flags().Int("link-ttl-hours", ValueOf.LinkTTLHours, "Number of hours generated links stay valid")
+	cmd.Flags().Int("link-grace-hours", ValueOf.LinkGraceHours, "Number of hours an already-started stream token stays usable after expiry")
 }
 
 func (c *config) loadConfigFromArgs(log *zap.Logger, cmd *cobra.Command) {
@@ -108,6 +114,10 @@ func (c *config) loadConfigFromArgs(log *zap.Logger, cmd *cobra.Command) {
 	botToken, _ := cmd.Flags().GetString("bot-token")
 	if botToken != "" {
 		os.Setenv("BOT_TOKEN", botToken)
+	}
+	hashSecret, _ := cmd.Flags().GetString("hash-secret")
+	if hashSecret != "" {
+		os.Setenv("HASH", hashSecret)
 	}
 	logChannelID, _ := cmd.Flags().GetString("log-channel")
 	if logChannelID != "" {
@@ -161,6 +171,14 @@ func (c *config) loadConfigFromArgs(log *zap.Logger, cmd *cobra.Command) {
 	streamMaxRetries, _ := cmd.Flags().GetInt("stream-max-retries")
 	if streamMaxRetries != 0 {
 		os.Setenv("STREAM_MAX_RETRIES", strconv.Itoa(streamMaxRetries))
+	}
+	linkTTLHours, _ := cmd.Flags().GetInt("link-ttl-hours")
+	if linkTTLHours != 0 {
+		os.Setenv("LINK_TTL_HOURS", strconv.Itoa(linkTTLHours))
+	}
+	linkGraceHours, _ := cmd.Flags().GetInt("link-grace-hours")
+	if linkGraceHours != 0 {
+		os.Setenv("LINK_GRACE_HOURS", strconv.Itoa(linkGraceHours))
 	}
 }
 
@@ -230,6 +248,18 @@ func Load(log *zap.Logger, cmd *cobra.Command) {
 	if ValueOf.StreamMaxRetries <= 0 {
 		log.Sugar().Info("STREAM_MAX_RETRIES must be greater than 0, defaulting to 3")
 		ValueOf.StreamMaxRetries = 3
+	}
+	if ValueOf.LinkTTLHours <= 0 {
+		log.Sugar().Info("LINK_TTL_HOURS must be greater than 0, defaulting to 48 hours")
+		ValueOf.LinkTTLHours = 48
+	}
+	if ValueOf.LinkGraceHours <= 0 {
+		log.Sugar().Info("LINK_GRACE_HOURS must be greater than 0, defaulting to 24 hours")
+		ValueOf.LinkGraceHours = 24
+	}
+	if ValueOf.HashSecret == "" {
+		log.Sugar().Info("HASH is not set, falling back to BOT_TOKEN as link signing secret")
+		ValueOf.HashSecret = ValueOf.BotToken
 	}
 }
 

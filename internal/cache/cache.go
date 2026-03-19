@@ -66,3 +66,15 @@ func (c *Cache) Delete(key string) error {
 	cache.cache.Del([]byte(key))
 	return nil
 }
+
+func (c *Cache) GetBytes(key string) ([]byte, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return cache.cache.Get([]byte(key))
+}
+
+func (c *Cache) SetBytes(key string, value []byte, expireSeconds int) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return cache.cache.Set([]byte(key), value, expireSeconds)
+}

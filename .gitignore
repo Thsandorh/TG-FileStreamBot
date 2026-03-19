@@ -27,6 +27,7 @@ sessons/
 
 # build folder
 dist/
+.artifacts/
 
 # logs folder
 logs/
