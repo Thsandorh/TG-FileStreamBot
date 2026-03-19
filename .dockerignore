@@ -1,0 +1,10 @@
+.git
+.github
+.vscode
+logs
+sessions
+*.session
+fsb
+fsb.env
+README.md
+LICENSE

@@ -1,0 +1,34 @@
+name: Build Linux amd64 fsb
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "codex/**"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Build fsb
+        run: |
+          mkdir -p dist
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-w -s" -o dist/fsb ./cmd/fsb
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fsb-linux-amd64
+          path: dist/fsb
+          if-no-files-found: error

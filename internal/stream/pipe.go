@@ -6,6 +6,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,6 +16,8 @@ import (
 	"github.com/gotd/td/tg"
 	"go.uber.org/zap"
 )
+
+var floodWaitPattern = regexp.MustCompile(`FLOOD_WAIT \((\d+)\)`)
 
 // calculateBlockSize func determines optimal block size based on the range requested.
 // Smaller ranges use smaller blocks to reduce wasted bandwidth during seeks.
@@ -266,6 +271,19 @@ func (p *StreamPipe) downloadBlockWithRetry(offset int64) ([]byte, error) {
 		}
 
 		lastErr = err
+		if wait, ok := floodWaitDuration(err); ok {
+			p.log.Warn("Telegram asked us to slow down while streaming",
+				zap.Duration("wait", wait),
+				zap.Int("attempt", attempt+1),
+				zap.Int64("offset", offset),
+			)
+			select {
+			case <-time.After(wait):
+				continue
+			case <-p.ctx.Done():
+				return nil, p.ctx.Err()
+			}
+		}
 
 		// don't retry on context cancellation
 		if p.ctx.Err() != nil {
@@ -286,6 +304,25 @@ func (p *StreamPipe) downloadBlockWithRetry(offset int64) ([]byte, error) {
 	}
 
 	return nil, fmt.Errorf("%w: %v", ErrMaxRetriesExceeded, lastErr)
+}
+
+func floodWaitDuration(err error) (time.Duration, bool) {
+	if err == nil {
+		return 0, false
+	}
+
+	match := floodWaitPattern.FindStringSubmatch(strings.ToUpper(err.Error()))
+	if len(match) != 2 {
+		return 0, false
+	}
+
+	seconds, convErr := strconv.Atoi(match[1])
+	if convErr != nil || seconds < 0 {
+		return 0, false
+	}
+
+	// Give Telegram a small buffer before retrying.
+	return time.Duration(seconds+1) * time.Second, true
 }
 
 // downloadBlock fetches a single block from Telegram.

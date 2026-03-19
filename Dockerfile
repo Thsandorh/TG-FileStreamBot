@@ -3,7 +3,9 @@ ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /app
 COPY . .
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /app/fsb -ldflags="-w -s" ./cmd/fsb
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    GOMAXPROCS=1 GOMEMLIMIT=700MiB \
+    go build -p=1 -o /app/fsb -ldflags="-w -s" ./cmd/fsb
 
 FROM scratch
 COPY --from=builder /app/fsb /app/fsb
