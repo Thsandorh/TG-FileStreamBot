@@ -7,7 +7,7 @@ on:
       - "codex/**"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -32,3 +32,16 @@ jobs:
           name: fsb-linux-amd64
           path: dist/fsb
           if-no-files-found: error
+
+      - name: Publish prerelease asset
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "build-${env:GITHUB_SHA}".Substring(0, 13)
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag dist/fsb --title $tag --notes "Automated Linux amd64 build for $env:GITHUB_SHA" --prerelease
+          } else {
+            gh release upload $tag dist/fsb --clobber
+          }
+        shell: pwsh
