@@ -43,10 +43,6 @@ func getStreamRoute(ctx *gin.Context) {
 		return
 	}
 	expParam := ctx.Query("exp")
-	if expParam == "" {
-		http.Error(w, "missing exp param", http.StatusBadRequest)
-		return
-	}
 
 	worker := bot.GetNextWorker()
 
@@ -58,9 +54,17 @@ func getStreamRoute(ctx *gin.Context) {
 		return
 	}
 
-	if !utils.CheckStreamToken(messageID, file, authHash, expParam) {
-		http.Error(w, "invalid or expired link", http.StatusBadRequest)
-		return
+	if expParam == "" {
+		if !utils.CheckLegacyStreamHash(file, authHash) {
+			http.Error(w, "invalid hash", http.StatusBadRequest)
+			return
+		}
+		log.Info("Accepted legacy stream link", zap.Int("messageID", messageID))
+	} else {
+		if !utils.CheckStreamToken(messageID, file, authHash, expParam) {
+			http.Error(w, "invalid or expired link", http.StatusBadRequest)
+			return
+		}
 	}
 
 	// for photo messages

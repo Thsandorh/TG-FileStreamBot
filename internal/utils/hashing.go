@@ -21,6 +21,10 @@ func GetShortHash(fullHash string) string {
 	return fullHash[:config.ValueOf.HashLength]
 }
 
+func CheckHash(inputHash string, expectedHash string) bool {
+	return inputHash == GetShortHash(expectedHash)
+}
+
 func BuildStreamToken(messageID int, file *types.File) (string, int64) {
 	expiresAt := time.Now().Add(time.Duration(config.ValueOf.LinkTTLHours) * time.Hour).Unix()
 	signature := signStreamPayload(messageID, file, expiresAt)
@@ -49,6 +53,16 @@ func CheckStreamToken(messageID int, file *types.File, inputHash, expParam strin
 
 	activateToken(tokenKey)
 	return true
+}
+
+func CheckLegacyStreamHash(file *types.File, inputHash string) bool {
+	expectedHash := PackFile(
+		file.FileName,
+		file.FileSize,
+		file.MimeType,
+		file.ID,
+	)
+	return CheckHash(inputHash, expectedHash)
 }
 
 func signStreamPayload(messageID int, file *types.File, expiresAt int64) string {
